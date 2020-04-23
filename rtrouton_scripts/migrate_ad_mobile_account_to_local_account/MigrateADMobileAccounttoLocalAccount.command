@@ -1,6 +1,6 @@
 #!/bin/bash
-# Modified 6/15/2018
-Version=1.3
+# Modified 4/5/2019
+Version=1.4
 # Original source is from MigrateUserHomeToDomainAcct.sh
 # Written by Patrick Gallagher - https://twitter.com/patgmac
 #
@@ -13,8 +13,7 @@ Version=1.3
 
 # 1. Detect if the Mac is bound to AD and offer to unbind the Mac from AD if desired
 # 2. Display a list of the accounts with a UID greater than 1000
-# 3. Once an account is selected, back up the password hash of the account from the AuthenticationAuthority attribute
-# 4. Remove the following attributes from the specified account:
+# 3. Remove the following attributes from the specified account:
 # 
 # cached_groups
 # cached_auth_policy
@@ -22,7 +21,6 @@ Version=1.3
 # SMBPrimaryGroupSID
 # OriginalAuthenticationAuthority
 # OriginalNodeName
-# AuthenticationAuthority
 # SMBSID
 # SMBScriptPath
 # SMBPasswordLastSet
@@ -32,11 +30,11 @@ Version=1.3
 # MCXSettings
 # MCXFlags
 #
-# 5. Recreate the AuthenticationAuthority attribute and restore the password hash of the account from backup
-# 6. Restart the directory services process
-# 7. Check to see if the conversion process succeeded by checking the OriginalNodeName attribute for the value "Active Directory"
-# 8. If the conversion process succeeded, update the permissions on the account's home folder.
-# 9. Prompt if admin rights should be granted for the specified account
+# 4. Selectively modify the account's AuthenticationAuthority attribute to remove AD-specific attributes.
+# 5. Restart the directory services process
+# 6. Check to see if the conversion process succeeded by checking the OriginalNodeName attribute for the value "Active Directory"
+# 7. If the conversion process succeeded, update the permissions on the account's home folder.
+# 8. Prompt if admin rights should be granted for the specified account
 #
 # Version 1.1
 #
@@ -68,6 +66,18 @@ Version=1.3
 # Fix to account password backup and restore process. Previous versions 
 # of the script were adding extra quote marks to the account's plist 
 # file located in /var/db/dslocal/nodes/Default/users/.
+#
+# Version 1.4
+#
+# Changes:
+#
+# macOS 10.14.4 will remove the the actual ShadowHashData key immediately 
+# if the AuthenticationAuthority array value which references the ShadowHash
+# is removed from the AuthenticationAuthority array. To address this, the
+# existing AuthenticationAuthority array will be modified to remove the Kerberos
+# and LocalCachedUser user values.
+#
+# Thanks to the anonymous reporter who provided the bug report and fix.
 
 clear
 
@@ -113,6 +123,29 @@ RemoveAD(){
     /usr/bin/dscl /Search/Contacts -change . SearchPolicy dsAttrTypeStandard:CSPSearchPath dsAttrTypeStandard:NSPSearchPath
 }
 
+PasswordMigration(){
+
+    # macOS 10.14.4 will remove the the actual ShadowHashData key immediately 
+    # if the AuthenticationAuthority array value which references the ShadowHash
+    # is removed from the AuthenticationAuthority array. To address this, the
+    # existing AuthenticationAuthority array will be modified to remove the Kerberos
+    # and LocalCachedUser user values.
+ 
+
+    AuthenticationAuthority=$(/usr/bin/dscl -plist . -read /Users/$netname AuthenticationAuthority)
+    Kerberosv5=$(echo "${AuthenticationAuthority}" | xmllint --xpath 'string(//string[contains(text(),"Kerberosv5")])' -)
+    LocalCachedUser=$(echo "${AuthenticationAuthority}" | xmllint --xpath 'string(//string[contains(text(),"LocalCachedUser")])' -)
+    
+    # Remove Kerberosv5 and LocalCachedUser
+    if [[ ! -z "${Kerberosv5}" ]]; then
+        /usr/bin/dscl -plist . -delete /Users/$netname AuthenticationAuthority "${Kerberosv5}"
+    fi
+    
+    if [[ ! -z "${LocalCachedUser}" ]]; then
+        /usr/bin/dscl -plist . -delete /Users/$netname AuthenticationAuthority "${LocalCachedUser}"
+    fi
+}
+
 RunAsRoot "${0}"
 
 # Check for AD binding and offer to unbind if found. 
@@ -150,10 +183,6 @@ until [ "$user" == "FINISHED" ]; do
 			/usr/bin/printf "The $netname account is not a AD mobile account\n"
 			break
 		fi
-
-			# Preserve the account password by backing up password hash
-			
-			shadowhash=$(/usr/bin/dscl -plist . -read /Users/$netname AuthenticationAuthority | xmllint --xpath 'string(//string[contains(text(),"ShadowHash")])' -)
 			
 			# Remove the account attributes that identify it as an Active Directory mobile account
 			
@@ -164,8 +193,6 @@ until [ "$user" == "FINISHED" ]; do
 			/usr/bin/dscl . -delete /users/$netname SMBPrimaryGroupSID
 			/usr/bin/dscl . -delete /users/$netname OriginalAuthenticationAuthority
 			/usr/bin/dscl . -delete /users/$netname OriginalNodeName
-			/usr/bin/dscl . -delete /users/$netname AuthenticationAuthority
-			/usr/bin/dscl . -create /users/$netname AuthenticationAuthority "${shadowhash}"
 			/usr/bin/dscl . -delete /users/$netname SMBSID
 			/usr/bin/dscl . -delete /users/$netname SMBScriptPath
 			/usr/bin/dscl . -delete /users/$netname SMBPasswordLastSet
@@ -175,6 +202,10 @@ until [ "$user" == "FINISHED" ]; do
 			/usr/bin/dscl . -delete /users/$netname PrimaryNTDomain
 			/usr/bin/dscl . -delete /users/$netname MCXSettings
 			/usr/bin/dscl . -delete /users/$netname MCXFlags
+
+			# Migrate password and remove AD-related attributes
+           
+			PasswordMigration
 
 			# Refresh Directory Services
 			if [[ ${osvers} -ge 7 ]]; then

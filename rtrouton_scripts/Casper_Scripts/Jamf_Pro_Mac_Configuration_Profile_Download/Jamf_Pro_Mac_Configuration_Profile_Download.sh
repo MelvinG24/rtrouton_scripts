@@ -4,7 +4,7 @@
 # please enter the complete directory path into the ProfileDownloadDirectory
 # variable below.
 
-ProfileDownloadDirectory="/Users/i858772/work_github/Jamf_Pro/jamf_pro_macOS_profiles/apple_applebucket_int_sap_downloaded_profiles"
+ProfileDownloadDirectory=""
 
 # If the ProfileDownloadDirectory isn't specified above, a directory will be
 # created and the complete directory path displayed by the script.
@@ -30,18 +30,18 @@ jamfpro_user=""
 # Set the password here if you want it hardcoded.
 jamfpro_password=""	
 
-# Read the appropriate values from ~/Library/Preferences/corp.sap.jamfpro-info.plist
+# Read the appropriate values from ~/Library/Preferences/com.github.jamfpro-info.plist
 # if the file is available. To create the file, run the following commands:
 #
-# defaults write $HOME/Library/Preferences/corp.sap.jamfpro-info jamfpro_url https://jamf.pro.server.here
-# defaults write $HOME/Library/Preferences/corp.sap.jamfpro-info jamfpro_user API_account_username_goes_here
-# defaults write $HOME/Library/Preferences/corp.sap.jamfpro-info jamfpro_password API_account_password_goes_here
+# defaults write $HOME/Library/Preferences/com.github.jamfpro-info jamfpro_url https://jamf.pro.server.here
+# defaults write $HOME/Library/Preferences/com.github.jamfpro-info jamfpro_user API_account_username_goes_here
+# defaults write $HOME/Library/Preferences/com.github.jamfpro-info jamfpro_password API_account_password_goes_here
 #
 
-if [[ -f "$HOME/Library/Preferences/corp.sap.jamfpro-info.plist" ]]; then
-     jamfpro_user=$(defaults read $HOME/Library/Preferences/corp.sap.jamfpro-info jamfpro_user)
-     jamfpro_password=$(defaults read $HOME/Library/Preferences/corp.sap.jamfpro-info jamfpro_password)
-     jamfpro_url=$(defaults read $HOME/Library/Preferences/corp.sap.jamfpro-info jamfpro_url)
+if [[ -f "$HOME/Library/Preferences/com.github.jamfpro-info.plist" ]]; then
+     jamfpro_user=$(defaults read $HOME/Library/Preferences/com.github.jamfpro-info jamfpro_user)
+     jamfpro_password=$(defaults read $HOME/Library/Preferences/com.github.jamfpro-info jamfpro_password)
+     jamfpro_url=$(defaults read $HOME/Library/Preferences/com.github.jamfpro-info jamfpro_url)
 fi
 
 # If the Jamf Pro URL, the account username or the account password aren't available
